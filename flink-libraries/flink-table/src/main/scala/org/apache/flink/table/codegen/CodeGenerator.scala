@@ -871,12 +871,14 @@ class CodeGenerator(
       returnType: TypeInformation[_ <: Any],
       resultFieldNames: Seq[String])
     : GeneratedExpression = {
-    val input1AccessExprs = for (i <- 0 until input1.getArity if input1Mapping.contains(i))
+
+    val input1AccessExprs = for (i <- input1Mapping.indices)
       yield generateInputAccess(input1, input1Term, i, input1Mapping)
 
     val input2AccessExprs = input2 match {
-      case Some(ti) => for (i <- 0 until ti.getArity if input2Mapping.contains(i))
+      case Some(ti) => for (i <- input2Mapping.indices)
         yield generateInputAccess(ti, input2Term, i, input2Mapping)
+
       case None => Seq() // add nothing
     }
 
@@ -887,17 +889,21 @@ class CodeGenerator(
     * Generates an expression from the left input and the right table function.
     */
   def generateCorrelateAccessExprs: (Seq[GeneratedExpression], Seq[GeneratedExpression]) = {
-    val input1AccessExprs = for (i <- 0 until input1.getArity)
+
+    val input1AccessExprs = for (i <- input1Mapping.indices)
       yield generateInputAccess(input1, input1Term, i, input1Mapping)
 
     val input2AccessExprs = input2 match {
-      case Some(ti) => for (i <- 0 until ti.getArity if input2Mapping.contains(i))
+      case Some(ti) =>
         // use generateFieldAccess instead of generateInputAccess to avoid the generated table
         // function's field access code is put on the top of function body rather than
         // the while loop
-        yield generateFieldAccess(ti, input2Term, i, input2Mapping)
+        for (i <- input2Mapping.indices)
+          yield generateFieldAccess(ti, input2Term, i, input2Mapping)
+
       case None => throw new CodeGenException("Type information of input2 must not be null.")
     }
+
     (input1AccessExprs, input2AccessExprs)
   }
 
@@ -1626,12 +1632,7 @@ class CodeGenerator(
 
     val fieldType = inputType match {
       case ct: CompositeType[_] =>
-        val fieldIndex = if (ct.isInstanceOf[PojoTypeInfo[_]]) {
-          fieldMapping(index)
-        }
-        else {
-          index
-        }
+        val fieldIndex = fieldMapping(index)
         ct.getTypeAt(fieldIndex)
       case at: AtomicType[_] => at
       case _ => throw new CodeGenException("Unsupported type for input field access.")
@@ -1666,12 +1667,7 @@ class CodeGenerator(
     : GeneratedExpression = {
     inputType match {
       case ct: CompositeType[_] =>
-        val fieldIndex = if (ct.isInstanceOf[PojoTypeInfo[_]]) {
-          fieldMapping(index)
-        }
-        else {
-          index
-        }
+        val fieldIndex = fieldMapping(index)
         val accessor = fieldAccessorFor(ct, fieldIndex)
         val fieldType: TypeInformation[Any] = ct.getTypeAt(fieldIndex)
         val fieldTypeTerm = boxedTypeTermForTypeInfo(fieldType)

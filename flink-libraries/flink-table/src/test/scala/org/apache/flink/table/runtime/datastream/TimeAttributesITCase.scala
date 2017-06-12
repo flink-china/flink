@@ -27,7 +27,7 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.api.scala.stream.utils.StreamITCase
+import org.apache.flink.table.api.scala.stream.utils.{StreamITCase, StreamTestData}
 import org.apache.flink.table.api.{TableEnvironment, TableException, Types, ValidationException}
 import org.apache.flink.table.calcite.RelTimeIndicatorConverterTest.TableFunc
 import org.apache.flink.table.expressions.TimeIntervalUnit
@@ -303,6 +303,28 @@ class TimeAttributesITCase extends StreamingMultipleProgramsTestBase {
       "1970-01-01 00:00:00.011,1970-01-01 00:00:00.012,1",
       "1970-01-01 00:00:00.019,1970-01-01 00:00:00.02,1"
     )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testPojoInputWithTimeAttributes(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+
+    val stream = StreamTestData.getPojo0DataStream(env).assignAscendingTimestamps(_.getMyLong)
+
+    val table = tEnv.fromDataStream(stream, 'myInt, 'myLong.rowtime, 'myLong2, 'myString)
+
+    val results = table.select('myLong, 'myInt, 'myLong2, 'myString).toAppendStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = Seq(
+      "1970-01-01 00:00:00.002,1,3,Hello",
+      "1970-01-01 00:00:00.004,2,6,Hello",
+      "1970-01-01 00:00:00.008,3,12,Hello World")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
